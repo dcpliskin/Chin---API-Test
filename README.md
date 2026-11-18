@@ -6,7 +6,7 @@ Automated tests for [PokéAPI](https://pokeapi.co/docs/v2), a free, read-only RE
 ![tests](https://github.com/dcpliskin/Chin---API-Test/actions/workflows/tests.yml/badge.svg)
 
 **At a glance**
-- **216 tests** across 9 modules, organized around what Pokémon players actually look up
+- **227 tests** across 9 modules, organized around what Pokémon players actually look up
   (stats, type weaknesses, evolutions, moves, where to catch).
 - **Every documented endpoint** is covered at least by a smoke test (see [Terms](#terms)).
 - **2 real API bugs found** and documented as expected failures, plus several gaps between the docs and the real API
@@ -33,7 +33,7 @@ python -m pip install -r requirements.txt
 python -m pytest
 ```
 
-Expected output ends with: **`214 passed, 2 xfailed`**. The 2 xfailed tests are the known API bugs below.
+Expected output ends with: **`225 passed, 2 xfailed`**. The 2 xfailed tests are the known API bugs below.
 They are reported, not hidden, and do not fail the run.
 
 ## What's tested
@@ -63,9 +63,10 @@ Coverage by docs section: **deep** for Pokémon, Evolution, Moves, Machines, Enc
 | 1 | **Bug:** `?limit=-1` returns 1350 of 1351 Pokémon. One is silently dropped. | Medium |
 | 2 | **Bug:** a negative `?offset` wraps around to the end of the list instead of being rejected. | Low |
 | 3 | `/pokemon/giratina` and `/pokemon/aegislash` return 404. Pokémon with several forms must be requested by form name (`giratina-altered`). A trap for players; not documented. | Low |
-| 4 | The docs say only `limit` and `offset` query parameters are allowed, but the API enforces this on single records (403) and not on lists (200). | Low |
-| 5 | Error formats are inconsistent: unknown names give a JSON 404, an unknown endpoint gives 400, and blocked characters or write requests give a 403 HTML page. | Low |
-| 6 | Not in the docs: name lookups ignore capitalization (`GENGAR` works), and `location_area_encounters` is a full URL, not a path. | Info |
+| 4 | The docs say only `limit` and `offset` query parameters are allowed, but the block **depends on parameter order**: `?foo=bar&limit=5` is blocked (403) while `?limit=5&foo=bar` gets through (200), on lists and single records alike. | Low |
+| 5 | Invalid paging values are **silently accepted** instead of rejected: `limit=0` and `limit=abc` return the default 20 results, `limit=1.5` returns 1, `offset=abc` starts at 0. | Low |
+| 6 | Error formats are inconsistent: unknown names give a JSON 404, an unknown endpoint gives a JSON 400, and blocked characters or write requests give a 403 HTML page. | Low |
+| 7 | Not in the docs: name lookups ignore capitalization (`GENGAR` works), and `location_area_encounters` is a full URL, not a path. | Info |
 
 Bugs 1 and 2 have tests that assert the *correct* behavior and are marked as expected failures (`xfail`).
 If PokéAPI fixes a bug, its test starts passing and the run flags it, so the marker can be removed.
@@ -83,8 +84,10 @@ The real data goes higher, because `max_chance` is the *total* of every way to f
 - **Links are checked in both directions,** e.g. Gengar's move list includes Shadow Ball, *and* Shadow Ball's list of
   learners includes Gengar.
 - **Responses are cached during a run,** as PokéAPI's fair-use policy asks.
-- **The tests can actually fail:** I changed expected values on purpose (e.g. Dragonite's stat total) and confirmed
-  the matching tests failed.
+- **Network blips don't fail the run:** dropped connections, rate limiting (429), and server errors (5xx) are retried
+  up to 3 times. Error responses under test (403, 404, 400) are never retried. The speed check uses the median of 3 requests.
+- **The tests can actually fail:** while writing the suite, I manually changed expected values (e.g. Dragonite's stat
+  total) and confirmed the matching tests failed.
 
 **When a new Pokémon game comes out:** new Pokémon, forms, and games don't break anything. A test fails only if a
 new game *rebalances* one of the test Pokémon (e.g. changes its stats), because expected values reflect the latest
@@ -96,7 +99,7 @@ removes an endpoint, so the smoke-test list stays current.
 
 - Runs against the live API, so it needs the network and PokéAPI being up. **Next:** record responses
   (e.g. VCR.py) so the suite also runs offline.
-- The response-time check (under 2 seconds) is a sanity check, not a performance test.
+- The response-time check (median under 2 seconds) is a sanity check, not a performance test.
 - **Next:** run the consistency checks across all 1025 species nightly, not just the sample; pin expected
   values to a fixed generation using the `past_*` fields so rebalances never break tests; check caching
   (`ETag` → 304); report bugs 1 and 2 to the PokéAPI project.

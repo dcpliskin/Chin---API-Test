@@ -6,8 +6,20 @@ timing, headers) use the raw `session` fixture instead.
 """
 import pytest
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from tests.helpers import BASE_URL, TIMEOUT
+
+# Retry only transient failures (dropped connections, rate limiting, server errors), so a network
+# blip in CI doesn't fail the run. 4xx responses such as 403/404 are never retried: they're results under test.
+RETRY = Retry(
+    total=3,
+    backoff_factor=0.5,
+    status_forcelist=(429, 500, 502, 503, 504),
+    allowed_methods=("GET", "HEAD", "OPTIONS"),
+    raise_on_status=False,  # after the last retry, return the response so the test reports the real status
+)
 
 
 class PokeApi:
@@ -40,6 +52,7 @@ class PokeApi:
 def session():
     with requests.Session() as s:
         s.headers["User-Agent"] = "Chin-API-Test (pytest; github.com/dcpliskin/Chin---API-Test)"
+        s.mount("https://", HTTPAdapter(max_retries=RETRY))
         yield s
 
 

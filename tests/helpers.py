@@ -50,6 +50,18 @@ def find_chain_link(link: dict, species: str) -> dict | None:
     return None
 
 
+def default_evolution_detail(link: dict) -> dict:
+    """The one evolution method the API flags `is_default` for a ChainLink.
+
+    Some species gained extra methods in later games (e.g. Linking Cord), so a link can have
+    several details. The docs say exactly one is the default; anything else is a data error.
+    """
+    defaults = [d for d in link["evolution_details"] if d.get("is_default")]
+    assert len(defaults) == 1, (
+        f"{link['species']['name']}: expected exactly 1 default evolution method, found {len(defaults)}")
+    return defaults[0]
+
+
 def chain_species(link: dict) -> list[str]:
     """All species names in an evolution chain, in depth-first order."""
     out = [link["species"]["name"]]

@@ -1,7 +1,7 @@
 """The game world around a Pokémon: items, TMs (machines), regional Pokédexes, locations, and games."""
 import pytest
 
-from tests.helpers import names
+from tests.helpers import default_evolution_detail, names
 
 # --- Items -----------------------------------------------------------------
 
@@ -18,7 +18,7 @@ def test_evolution_stones_are_evolution_items(api, item, evolves):
 def test_evolution_item_link_resolves_to_item(api):
     """Follow the link in Skitty's evolution details to the item record, as a player app would."""
     chain = api.json(api.json("/pokemon-species/skitty")["evolution_chain"]["url"])["chain"]
-    item_link = chain["evolves_to"][0]["evolution_details"][0]["item"]
+    item_link = default_evolution_detail(chain["evolves_to"][0])["item"]
     assert api.json(item_link["url"])["name"] == "moon-stone"
 
 

@@ -2,18 +2,12 @@
 import pytest
 
 from tests.data.favorites import EVOLUTIONS
-from tests.helpers import chain_species, find_chain_link
+from tests.helpers import chain_species, default_evolution_detail, find_chain_link
 
 
 def chain_for(api, species_name: str) -> dict:
     species = api.json(f"/pokemon-species/{species_name}")
     return api.json(species["evolution_chain"]["url"])["chain"]
-
-
-def default_detail(link: dict) -> dict:
-    """The evolution method the API flags `is_default`. Some species gained extra methods in later games."""
-    defaults = [d for d in link["evolution_details"] if d.get("is_default")]
-    return defaults[0] if defaults else link["evolution_details"][0]
 
 
 @pytest.mark.parametrize("from_species, to_species, trigger, key, value", EVOLUTIONS,
@@ -25,7 +19,7 @@ def test_evolution_method(api, from_species, to_species, trigger, key, value):
     child = next((c for c in parent["evolves_to"] if c["species"]["name"] == to_species), None)
     assert child, f"{from_species} does not evolve into {to_species}"
 
-    detail = default_detail(child)
+    detail = default_evolution_detail(child)
     assert detail["trigger"]["name"] == trigger
     if key == "item":
         assert detail["item"]["name"] == value
