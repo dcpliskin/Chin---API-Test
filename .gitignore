@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Test reports
+report*.html
+junit*.xml
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
