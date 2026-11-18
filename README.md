@@ -16,7 +16,7 @@ python -m pip install -r requirements.txt
 python -m pytest -v
 ```
 
-Expected result: **141 passed, 2 xfailed** in about 5-15 seconds. The two `xfail`s are real API bugs
+Expected result: **214 passed, 2 xfailed** in about 5-20 seconds. The two `xfail`s are real API bugs
 (see [Findings](#findings)). CI runs the same suite on every push and weekly on a schedule
 (`.github/workflows/tests.yml`), so changes to the live API get noticed.
 
@@ -34,7 +34,21 @@ Aegislash, Torterra, Psyduck, and Gengar.
 | `test_forms.py` | "Megas and alternate forms" | Aegislash Blade swaps attack/defense; Giratina Origin; Mega stat totals are +100; G-Max keeps base stats |
 | `test_moves.py` | "What does it learn, and when?" | Squirtle learns Hydro Pump at L42 in Red/Blue but L33 in Scarlet/Violet; move power/accuracy/PP; move history |
 | `test_encounters.py` | "Where can I catch it?" | Giratina in Platinum's Distortion World; encounter levels and rates are valid |
+| `test_game_world.py` | "Which TM? Which Pokédex? What's in this area?" | TM30 is Shadow Ball in Platinum but not Red/Blue; Giratina is #210 in Platinum's Sinnoh dex but absent from Diamond/Pearl's; the Distortion World area lists Giratina; evolution stones are evolution items |
 | `test_api_behavior.py` | General API health | counts, pagination, 404s, blocked characters and methods, headers, response time |
+| `test_smoke_all_endpoints.py` | Breadth | every one of the 50 resource lists is valid and its first item resolves; flags endpoints added or removed |
+
+### Coverage by docs section
+
+| Docs section | Coverage |
+|---|---|
+| Pokémon (Pokémon, species, forms, types, abilities) | Deep: lookups, stats, matchups, forms, schemas |
+| Evolution | Deep: level, item, and trade methods; chain ↔ species consistency |
+| Moves, Machines | Deep: learnsets per game, move data and history, which TM teaches a move |
+| Encounters, Locations | Deep: where to catch, encounter rates, area → Pokémon, location → region |
+| Games (generations, Pokédexes, versions, version groups) | Moderate: regional dex numbers, version → generation links |
+| Items | Moderate: evolution items and the links that lead to them |
+| Berries, Contests, Currencies, Utility | Smoke tests only (list is valid, first item resolves). Few players look these up, so they were lower priority. |
 
 **How expected values were chosen:**
 - Every expected value was **observed from the live API first**, then compared with the docs, not taken from
@@ -61,6 +75,7 @@ Bugs and surprises found while testing:
 | 5 | Unknown endpoint (`/pokemonz/25`) returns **400**, not 404. Blocked characters (`farfetch'd`, `mr.mime`) and write methods return a **403 HTML page** from Cloudflare, not a JSON error. | Low | `test_api_behavior.py` |
 | 6 | Name lookups are **case-insensitive** (`GENGAR` works), which the docs don't state. | Info | `test_name_lookup_is_case_insensitive` |
 | 7 | `location_area_encounters` is a full URL, not a path as the docs suggest. | Info (docs mismatch) | `test_encounters_link_resolves` |
+| 8 | The root URL lists `meta` (deploy date and commit hash) alongside the resource lists, but it isn't a list. Also, `/pokedex/sinnoh` 404s: regional dexes are named per game (`original-sinnoh`, `extended-sinnoh`). | Info | `test_smoke_all_endpoints.py`, `test_game_world.py` |
 
 **One of my assumptions was wrong:** I first asserted that an encounter's `max_chance` is at most 100%.
 The live data has values above 100 (e.g. 110 and 130 for Psyduck around the Sinnoh lakes). `max_chance` is the *sum* of every method's chance in an area
@@ -82,6 +97,7 @@ then passes unexpectedly and fails the run). That's the signal to remove the mar
   CI without depending on the live service, and add contract tests for the schemas.
 - **Wider data checks:** run the consistency checks (variety links, evolution ↔ species, type chart) across *all*
   1025 species in a nightly job, not just the sample.
+- **Deeper checks for the smoke-only sections** (Berries, Contests), e.g. berry flavor ↔ nature preferences.
 - **More player questions:** held items and their rarity, Pokémon availability per game (version exclusives),
   egg-group breeding compatibility, abilities' effect text in other languages.
 - **Non-functional:** cache behavior (`ETag` / `If-None-Match` → 304), behavior under rapid repeated requests,
