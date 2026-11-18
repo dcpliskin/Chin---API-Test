@@ -148,3 +148,9 @@ tests/
   test_*.py            the tests, one file per question above
 .github/workflows/tests.yml   GitHub Actions: runs the suite on push and weekly
 ```
+
+## Personal applicant note
+
+I didn't realize this would be so free form and I ambitiously chose the Pokémon API, so I hope the coverage suffices!
+
+I will take forever if I chase gaps all day based off of the size and depth of this API.
