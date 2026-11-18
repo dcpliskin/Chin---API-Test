@@ -7,8 +7,7 @@ timing, headers) use the raw `session` fixture instead.
 import pytest
 import requests
 
-BASE_URL = "https://pokeapi.co/api/v2"
-TIMEOUT = 15  # seconds
+from tests.helpers import BASE_URL, TIMEOUT
 
 
 class PokeApi:

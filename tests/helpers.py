@@ -1,4 +1,7 @@
-"""Small pure helpers for reading PokéAPI responses the way a player would."""
+"""Constants and small pure helpers for reading PokéAPI responses the way a player would."""
+
+BASE_URL = "https://pokeapi.co/api/v2"
+TIMEOUT = 15  # seconds
 
 
 def stat_map(pokemon: dict) -> dict[str, int]:
