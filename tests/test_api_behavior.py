@@ -95,24 +95,45 @@ def test_limit_larger_than_count_returns_everything(api):
     ({"limit": 3, "offset": "abc"}, 3, "bulbasaur"),  # non-numeric offset falls back to 0
 ])
 def test_invalid_paging_values_fall_back_silently(api, params, expected_len, expected_first):
-    """Observed: invalid limit/offset values are not rejected; the API falls back (README finding #5)."""
+    """Observed: invalid limit/offset values are not rejected; the API falls back (README finding #4)."""
     page = api.json("/pokemon", **params)
     assert len(page["results"]) == expected_len
     assert page["results"][0]["name"] == expected_first
 
 
 @pytest.mark.known_bug
-@pytest.mark.xfail(reason="BUG: limit=-1 returns count-1 results (last entry silently dropped)")
-def test_negative_limit_does_not_drop_results(api):
-    page = api.json("/pokemon", limit=-1)
-    assert len(page["results"]) in (0, page["count"]), "expected either a rejection or the full list"
+@pytest.mark.xfail(reason="BUG: negative limit/offset are applied as a raw Python slice, "
+                          "results[offset:offset+limit] (README finding #1)")
+@pytest.mark.parametrize("offset, limit", [
+    (None, -1),   # observed: [0:-1]  -> last entry silently dropped
+    (-5, 3),      # observed: [-5:-2] -> entries from the END of the list
+    (-5, 5),      # observed: [-5:0]  -> silently empty
+    (3, -2),      # observed: [3:1]   -> silently empty
+    (-1351, 3),   # observed: right entries, but `next` link points to offset=-1348
+])
+def test_negative_paging_values_are_rejected_or_clamped(api, offset, limit):
+    """Correct behavior (the docs don't define it) is either:
+    - a 4xx rejection, or
+    - negatives treated as 0: a page that starts at the clamped offset, with the requested size
+      (or, for a negative limit, the default 20 or the whole list), and links with no negative values.
+    An empty page or entries from the end of the list are never acceptable.
+    """
+    params = {k: v for k, v in (("offset", offset), ("limit", limit)) if v is not None}
+    resp = api.get("/pokemon", **params)
+    if 400 <= resp.status_code < 500:
+        return  # rejecting the input is correct
 
+    page = resp.json()
+    full = [p["name"] for p in api.json("/pokemon", limit=100000)["results"]]
+    start = max(offset or 0, 0)
+    remaining = len(full) - start
+    allowed_sizes = {min(limit, remaining)} if limit and limit > 0 else {min(20, remaining), remaining}
+    got = [p["name"] for p in page["results"]]
 
-@pytest.mark.known_bug
-@pytest.mark.xfail(reason="BUG: negative offset wraps around to the end of the list")
-def test_negative_offset_is_not_treated_as_from_the_end(api):
-    page = api.json("/pokemon", limit=3, offset=-5)
-    assert page["results"] == [] or page["results"][0]["name"] == "bulbasaur"
+    assert len(got) in allowed_sizes, f"page size {len(got)}, expected one of {sorted(allowed_sizes)}"
+    assert got == full[start:start + len(got)], "page doesn't start at the clamped offset"
+    for link in (page["next"], page["previous"]):
+        assert link is None or ("offset=-" not in link and "limit=-" not in link), f"negative value in link {link}"
 
 
 # --- Errors -----------------------------------------------------------------
@@ -144,7 +165,7 @@ def test_names_with_blocked_symbols_are_rejected(api, blocked):
 def test_unknown_query_params_blocked_only_when_query_does_not_start_with_limit_or_offset(api, query, status):
     """The docs say only `limit` and `offset` are allowed. Observed: the block depends on
     parameter ORDER. A query that starts with limit/offset gets through with extra parameters.
-    This test records the current behavior (README finding #4)."""
+    This test records the current behavior (README finding #3)."""
     resp = api.get(query)
     assert resp.status_code == status
     expected_type = "application/json" if status == 200 else "text/html"

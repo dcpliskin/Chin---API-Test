@@ -6,12 +6,12 @@ Automated tests for [PokéAPI](https://pokeapi.co/docs/v2), a free, read-only RE
 ![tests](https://github.com/dcpliskin/Chin---API-Test/actions/workflows/tests.yml/badge.svg)
 
 **At a glance**
-- **227 tests** across 9 modules, organized around what Pokémon players actually look up
+- **230 tests** across 9 modules, organized around what Pokémon players actually look up
   (stats, type weaknesses, evolutions, moves, where to catch).
 - **Every documented endpoint** is covered at least by a smoke test (see [Terms](#terms)).
-- **2 real API bugs found** and documented as expected failures, plus several gaps between the docs and the real API
-  ([Findings](#findings)).
-- Runs in about 10 seconds against the live API. GitHub Actions runs it on every push and weekly.
+- **A real API bug found** (paging handles negative values wrongly, with several symptoms), documented as expected
+  failures, plus several gaps between the docs and the real API ([Findings](#findings)).
+- Runs in under 20 seconds against the live API (about 6 s locally, 9-18 s in CI). GitHub Actions runs it on every push and weekly.
 
 ## Quick start
 
@@ -33,7 +33,7 @@ python -m pip install -r requirements.txt
 python -m pytest
 ```
 
-Expected output ends with: **`225 passed, 2 xfailed`**. The 2 xfailed tests are the known API bugs below.
+Expected output ends with: **`225 passed, 5 xfailed`**. The 5 xfailed tests are the known paging bug below.
 They are reported, not hidden, and do not fail the run.
 
 ## What's tested
@@ -60,16 +60,17 @@ Coverage by docs section: **deep** for Pokémon, Evolution, Moves, Machines, Enc
 
 | # | Finding | Severity |
 |---|---|---|
-| 1 | **Bug:** `?limit=-1` returns 1350 of 1351 Pokémon. One is silently dropped. | Medium |
-| 2 | **Bug:** a negative `?offset` wraps around to the end of the list instead of being rejected. | Low |
-| 3 | `/pokemon/giratina` and `/pokemon/aegislash` return 404. Pokémon with several forms must be requested by form name (`giratina-altered`). A trap for players; not documented. | Low |
-| 4 | The docs say only `limit` and `offset` query parameters are allowed, but the block **depends on parameter order**: `?foo=bar&limit=5` is blocked (403) while `?limit=5&foo=bar` gets through (200), on lists and single records alike. | Low |
-| 5 | Invalid paging values are **silently accepted** instead of rejected: `limit=0` and `limit=abc` return the default 20 results, `limit=1.5` returns 1, `offset=abc` starts at 0. | Low |
-| 6 | Error formats are inconsistent: unknown names give a JSON 404, an unknown endpoint gives a JSON 400, and blocked characters or write requests give a 403 HTML page. | Low |
-| 7 | Not in the docs: name lookups ignore capitalization (`GENGAR` works), and `location_area_encounters` is a full URL, not a path. | Info |
+| 1 | **Bug: negative `limit` / `offset` values are applied as a raw Python list slice**, `results[offset : offset+limit]`, instead of being rejected. Symptoms: `limit=-1` silently drops the last entry (1350 of 1351); `offset=-5&limit=3` returns entries from the *end* of the list; `offset=-5&limit=5` returns an empty page; the `next` link points to negative offsets (e.g. `offset=-2`). All 10 combinations tried matched slice behavior exactly. | Medium |
+| 2 | `/pokemon/giratina` and `/pokemon/aegislash` return 404. Pokémon with several forms must be requested by form name (`giratina-altered`). A trap for players; not documented. | Low |
+| 3 | The docs say only `limit` and `offset` query parameters are allowed, but the block **depends on parameter order**: `?foo=bar&limit=5` is blocked (403) while `?limit=5&foo=bar` gets through (200), on lists and single records alike. | Low |
+| 4 | Invalid paging values are **silently accepted** instead of rejected: `limit=0` and `limit=abc` return the default 20 results, `limit=1.5` returns 1, `offset=abc` starts at 0. | Low |
+| 5 | Error formats are inconsistent: unknown names give a JSON 404, an unknown endpoint gives a JSON 400, and blocked characters or write requests give a 403 HTML page. | Low |
+| 6 | Not in the docs: name lookups ignore capitalization (`GENGAR` works), and `location_area_encounters` is a full URL, not a path. | Info |
 
-Bugs 1 and 2 have tests that assert the *correct* behavior and are marked as expected failures (`xfail`).
-If PokéAPI fixes a bug, its test starts passing and the run flags it, so the marker can be removed.
+Bug 1 is tested with 5 combinations of negative values, each asserting the *correct* behavior (a 4xx rejection,
+or negatives treated as 0) and marked as an expected failure (`xfail`). An empty page never counts as correct, so
+the test can't pass by accident. If PokéAPI fixes the bug, the tests start passing and the run flags it, so the
+marker can be removed.
 
 **A wrong assumption, corrected:** I first assumed an encounter's `max_chance` could not exceed 100%.
 The real data goes higher, because `max_chance` is the *total* of every way to find a Pokémon in an area
@@ -102,7 +103,33 @@ removes an endpoint, so the smoke-test list stays current.
 - The response-time check (median under 2 seconds) is a sanity check, not a performance test.
 - **Next:** run the consistency checks across all 1025 species nightly, not just the sample; pin expected
   values to a fixed generation using the `past_*` fields so rebalances never break tests; check caching
-  (`ETag` → 304); report bugs 1 and 2 to the PokéAPI project.
+  (`ETag` → 304); report the paging bug (finding 1) to the PokéAPI project as one slicing bug.
+
+## Post creation finetuning
+
+After the first complete version was pushed, I had it reviewed from a fresh session that cloned the repo
+and ran it only by following this README, the way an evaluator would. Each review finding was checked against the
+live API before changing anything. Changes since then:
+
+**Round 1** (commit `f9c2d58`)
+- **Corrected finding 3 (query parameters).** I had written "blocked on single records, allowed on lists,"
+  generalized from two requests. More requests showed the real rule depends on **parameter order**. Added a test for it.
+- **Error tests now check the format, not just the status code** (403 HTML page vs. JSON 400/404), because
+  the format difference is the point of finding 5.
+- **New finding 4:** invalid paging values (`limit=0`, `limit=abc`, `limit=1.5`, `offset=abc`) are silently
+  accepted. Added tests, plus last-page and oversized-limit boundary tests.
+- **Less flaky in CI:** transient failures (connection errors, 429, 5xx) are retried, but never the 4xx responses
+  under test. The speed check uses a median of 3 requests.
+- **Stricter evolution helper:** requires exactly one default evolution method instead of silently using the first.
+
+**Round 2**
+- **Merged two bugs into one (finding 1).** The review showed that "limit=-1 drops a result" and "negative offset
+  wraps around" are the same root cause: paging is a raw Python slice. I confirmed it with 10 combinations,
+  which also showed empty pages and negative `next` links.
+- **Fixed a test that could pass by accident.** The old negative-offset test accepted an empty page as correct,
+  so it caught the bug only because of the specific values used. It's now one test with 5 combinations and an
+  explicit definition of correct behavior. I confirmed that correct paging passes it.
+- Updated the runtime estimate to match measured runs (about 6 s locally, 9-18 s in CI).
 
 ## Terms
 
