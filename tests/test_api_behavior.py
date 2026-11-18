@@ -7,13 +7,17 @@ import pytest
 from tests import schemas
 from tests.helpers import BASE_URL, TIMEOUT
 
-BASE_SPECIES_COUNT = 1025  # National Dex through Gen 9 (Pecharunt). Pinned because it only changes with a new generation.
+MIN_SPECIES_COUNT = 1025  # National Dex through Gen 9 (Pecharunt). A floor, so a new generation doesn't break the suite.
 
 
 # --- Counts ---------------------------------------------------------------
 
-def test_species_count_matches_national_dex(api):
-    assert api.json("/pokemon-species", limit=1)["count"] == BASE_SPECIES_COUNT
+def species_count(api) -> int:
+    return api.json("/pokemon-species", limit=1)["count"]
+
+
+def test_species_count_covers_national_dex(api):
+    assert species_count(api) >= MIN_SPECIES_COUNT
 
 
 def test_every_listed_pokemon_is_returned_and_unique(api):
@@ -36,7 +40,8 @@ def test_base_pokemon_ids_are_contiguous_and_forms_come_after(api):
     base = [i for i in ids if i < 10000]
     forms = [i for i in ids if i >= 10000]
 
-    assert base == list(range(1, BASE_SPECIES_COUNT + 1))
+    # One default Pokémon per species, numbered 1..N with no gaps, whatever N is today.
+    assert base == list(range(1, species_count(api) + 1))
     assert forms and min(forms) == 10001  # alternate forms (megas, regional forms, ...) start at 10001
     assert len(ids) == len(base) + len(forms)
 

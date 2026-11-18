@@ -88,7 +88,18 @@ then passes unexpectedly and fails the run). That's the signal to remove the mar
 ## Assumptions
 
 - Tests run against the live public API, so they depend on network access and PokéAPI being up. Stubbing was optional and not done (see next steps).
-- Game data for released games doesn't change. If PokéAPI corrects a value, the matching entry in `favorites.py` needs updating.
+- Game data for released games doesn't change (old learnsets, regional dex numbers, TM numbers, Platinum encounters).
+
+### What happens when a new Pokémon game comes out
+
+| Change | Effect on the suite |
+|---|---|
+| New species (new generation) | **Passes.** Counts are floors (≥ 1025) and consistency rules (IDs have no gaps up to the live count, `count` equals the entries walked), not pinned totals. |
+| New forms (megas etc.) | **Passes.** Forms get IDs from 10001, which the tests expect. Mega Dragonite was added this way. |
+| New games, Pokédexes, move history entries | **Passes.** Comparisons of things that grow are subset checks. |
+| List order changes | **Passes.** No test depends on the order of a list. |
+| A game **rebalances** one of the test Pokémon (stats, abilities, types, move power) | **Fails on purpose.** Expected values in `tests/data/favorites.py` reflect the latest game. Check the Pokémon's `past_*` fields: if the old value moved there, it's an intentional rebalance, so update the table. Otherwise it's a data defect. |
+| PokéAPI adds or removes an endpoint | **Fails on purpose** (`test_root_lists_every_known_endpoint`), so the smoke list gets updated. |
 - The 2-second response-time limit is a sanity check, not a performance benchmark.
 
 ## What I'd test next
@@ -97,6 +108,8 @@ then passes unexpectedly and fails the run). That's the signal to remove the mar
   CI without depending on the live service, and add contract tests for the schemas.
 - **Wider data checks:** run the consistency checks (variety links, evolution ↔ species, type chart) across *all*
   1025 species in a nightly job, not just the sample.
+- **Rebalance-proof expected values:** pin each Pokémon's stats, abilities, and types *as of a fixed generation*
+  by rebuilding them from `past_stats` / `past_abilities` / `past_types`, so new games never break those tests.
 - **Deeper checks for the smoke-only sections** (Berries, Contests), e.g. berry flavor ↔ nature preferences.
 - **More player questions:** held items and their rarity, Pokémon availability per game (version exclusives),
   egg-group breeding compatibility, abilities' effect text in other languages.

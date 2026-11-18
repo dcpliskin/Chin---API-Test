@@ -90,7 +90,7 @@ def test_location_belongs_to_region(api):
     assert location["region"]["name"] == "sinnoh"
     region = api.json("/region/sinnoh")
     assert "distortion-world" in names(region["locations"])
-    assert {"original-sinnoh", "extended-sinnoh"} == names(region["pokedexes"])
+    assert {"original-sinnoh", "extended-sinnoh"} <= names(region["pokedexes"])  # a future Sinnoh game may add one
 
 
 # --- Games: generations, version groups, versions ----------------------------------------

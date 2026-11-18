@@ -3,6 +3,12 @@
 Only long-stable game data is pinned here (Pokédex numbers, types, base stats,
 evolution methods). Values that grow over time (total counts, learnsets in new
 games) are checked by consistency rules in the tests instead.
+
+NOTE: types, base stats, abilities, and type matchups reflect the LATEST game.
+A new game can rebalance them (e.g. Gengar lost Levitate in Gen 7). If a test here
+fails after a new game ships, first check the Pokémon's `past_stats` / `past_abilities` /
+`past_types`: if the old value moved there, the change is intentional and this table
+needs updating. If not, it's a real data defect.
 """
 
 # Default /pokemon/{name} records.
