@@ -39,7 +39,8 @@ def test_move_details(api, move, expected):
 
 
 def test_move_history_records_older_power(api):
-    # Hydro Pump was 120 power before Gen 6; the API stores the value before the X/Y change.
+    # Hydro Pump had 120 power until X/Y lowered it to 110. Observed: the API records this as a
+    # past_values entry keyed to x-y that holds the old power (120).
     # Subset check: a later rebalance would add another history entry without invalidating this one.
     past = api.json("/move/hydro-pump")["past_values"]
     assert ("x-y", 120) in {(p["version_group"]["name"], p["power"]) for p in past}

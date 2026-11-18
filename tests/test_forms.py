@@ -9,7 +9,7 @@ from tests.helpers import base_stat_total, stat_map, type_names
 @pytest.mark.parametrize("bare_name, default_form", [("giratina", "giratina-altered"),
                                                      ("aegislash", "aegislash-shield")])
 def test_multi_form_pokemon_need_form_name(api, bare_name, default_form):
-    """Gotcha for players: /pokemon/giratina 404s, because the record is stored under its form name.
+    """/pokemon/giratina 404s: Pokémon with several forms are stored under their form name.
 
     The species endpoint does accept the bare name, and its default variety leads to the right record.
     """

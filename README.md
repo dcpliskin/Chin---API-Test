@@ -1,130 +1,120 @@
 # Chin - API Test
 
 Automated tests for [PokéAPI](https://pokeapi.co/docs/v2), a free, read-only REST API of Pokémon game data
-that needs no authentication. Written in **Python** with **pytest**, **requests**, and **jsonschema**.
+(no API key needed). Written in Python with pytest.
 
 ![tests](https://github.com/dcpliskin/Chin---API-Test/actions/workflows/tests.yml/badge.svg)
 
-## Running the tests
+**At a glance**
+- **216 tests** across 9 modules, organized around what Pokémon players actually look up
+  (stats, type weaknesses, evolutions, moves, where to catch).
+- **Every documented endpoint** is covered at least by a smoke test (see [Terms](#terms)).
+- **2 real API bugs found** and documented as expected failures, plus several gaps between the docs and the real API
+  ([Findings](#findings)).
+- Runs in about 10 seconds against the live API. GitHub Actions runs it on every push and weekly.
 
-Requires Python 3 (developed and tested on 3.14; CI uses 3.14).
+## Quick start
+
+Needs Python 3.10+ and internet access.
 
 ```bash
 python -m venv .venv
-# Windows: .venv\Scripts\activate     macOS/Linux: source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pytest -v
 ```
 
-Expected result: **214 passed, 2 xfailed** in about 5-20 seconds. The two `xfail`s are real API bugs
-(see [Findings](#findings)). CI runs the same suite on every push and weekly on a schedule
-(`.github/workflows/tests.yml`), so changes to the live API get noticed.
+Activate the virtual environment:
 
-## Approach
+- Windows: `.venv\Scripts\activate`
+- macOS / Linux: `source .venv/bin/activate`
 
-PokéAPI is used mostly by players and fan sites, so the suite is organized around **what players actually look up**.
-It uses a fixed set of Pokémon chosen to cover interesting cases: Squirtle, Blastoise, Skitty, Giratina, Dragonite,
-Aegislash, Torterra, Psyduck, and Gengar.
+Then:
 
-| Module | Player question | Examples |
+```bash
+python -m pip install -r requirements.txt
+python -m pytest
+```
+
+Expected output ends with: **`214 passed, 2 xfailed`**. The 2 xfailed tests are the known API bugs below.
+They are reported, not hidden, and do not fail the run.
+
+## What's tested
+
+The suite uses a fixed set of Pokémon picked to cover interesting cases: Squirtle, Blastoise, Skitty,
+Giratina, Dragonite, Aegislash, Torterra, Psyduck, and Gengar.
+
+| File (`tests/`) | Question it answers | Examples |
 |---|---|---|
-| `test_pokedex_lookup.py` | "Show me this Pokémon" | name/ID lookups agree; exact types, base stats and stat totals; hidden abilities; species info (generation, legendary, egg groups); schema validation; case-insensitive names |
-| `test_type_matchups.py` | "What is it weak to?" | Dragonite and Torterra take 4x from Ice; Gengar is immune to Normal and Fighting; the type chart is checked for internal consistency |
-| `test_evolution.py` | "How does it evolve?" | level (Squirtle 16/36), item (Skitty + Moon Stone), trade (Haunter → Gengar, plus Linking Cord in Legends: Arceus); Giratina has no evolutions |
-| `test_forms.py` | "Megas and alternate forms" | Aegislash Blade swaps attack/defense; Giratina Origin; Mega stat totals are +100; G-Max keeps base stats |
-| `test_moves.py` | "What does it learn, and when?" | Squirtle learns Hydro Pump at L42 in Red/Blue but L33 in Scarlet/Violet; move power/accuracy/PP; move history |
-| `test_encounters.py` | "Where can I catch it?" | Giratina in Platinum's Distortion World; encounter levels and rates are valid |
-| `test_game_world.py` | "Which TM? Which Pokédex? What's in this area?" | TM30 is Shadow Ball in Platinum but not Red/Blue; Giratina is #210 in Platinum's Sinnoh dex but absent from Diamond/Pearl's; the Distortion World area lists Giratina; evolution stones are evolution items |
-| `test_api_behavior.py` | General API health | counts, pagination, 404s, blocked characters and methods, headers, response time |
-| `test_smoke_all_endpoints.py` | Breadth | every one of the 50 resource lists is valid and its first item resolves; flags endpoints added or removed |
+| `test_pokedex_lookup.py` | "Show me this Pokémon" | lookups by name and Pokédex number agree; exact types, base stats, hidden abilities, legendary status |
+| `test_type_matchups.py` | "What is it weak to?" | Dragonite and Torterra take 4x damage from Ice; Gengar is immune to Normal and Fighting |
+| `test_evolution.py` | "How does it evolve?" | Squirtle at levels 16 and 36; Skitty with a Moon Stone; Haunter by trading |
+| `test_forms.py` | "What about Megas and other forms?" | Aegislash's Blade form swaps attack and defense; Mega forms gain +100 total stats |
+| `test_moves.py` | "What does it learn, and when?" | Squirtle learns Hydro Pump at level 42 in Red/Blue but level 33 in Scarlet/Violet |
+| `test_encounters.py` | "Where can I catch it?" | Giratina is in Platinum's Distortion World |
+| `test_game_world.py` | "Which TM? Which regional Pokédex?" | TM30 teaches Shadow Ball in Platinum but a different move in Red/Blue |
+| `test_api_behavior.py` | "Does the API behave correctly?" | counts, paging through results, error responses, blocked requests, headers, speed |
+| `test_smoke_all_endpoints.py` | "Does every endpoint work?" | all 50 endpoints return a valid list, and its first item loads |
 
-### Coverage by docs section
-
-| Docs section | Coverage |
-|---|---|
-| Pokémon (Pokémon, species, forms, types, abilities) | Deep: lookups, stats, matchups, forms, schemas |
-| Evolution | Deep: level, item, and trade methods; chain ↔ species consistency |
-| Moves, Machines | Deep: learnsets per game, move data and history, which TM teaches a move |
-| Encounters, Locations | Deep: where to catch, encounter rates, area → Pokémon, location → region |
-| Games (generations, Pokédexes, versions, version groups) | Moderate: regional dex numbers, version → generation links |
-| Items | Moderate: evolution items and the links that lead to them |
-| Berries, Contests, Currencies, Utility | Smoke tests only (list is valid, first item resolves). Few players look these up, so they were lower priority. |
-
-**How expected values were chosen:**
-- Every expected value was **observed from the live API first**, then compared with the docs, not taken from
-  the docs or general knowledge alone. Several observations contradicted assumptions (see Findings).
-- Only stable game data is pinned: Pokédex numbers, types, base stats, evolution methods. These live in one
-  table, `tests/data/favorites.py`, so the tests stay readable.
-- Data that grows over time is checked with **consistency rules**, not hard-coded numbers. For example, the `/pokemon`
-  count (1351 today, and growing as new forms are added) must equal the number of entries found by walking every page.
-- Relationships are checked in both directions: Pokémon ↔ species, move ↔ learner, and type A → B against B ← A.
-- Responses are cached per test run (`tests/conftest.py`), following the API's fair-use policy. Tests that need a fresh
-  request (methods, headers, timing) bypass the cache.
-- I confirmed the suite can fail by breaking an expected value (Dragonite's stat total set to 601): the test failed as intended.
+Coverage by docs section: **deep** for Pokémon, Evolution, Moves, Machines, Encounters, and Locations;
+**moderate** for Games and Items; **smoke test only** for Berries, Contests, and Currencies (rarely looked up by players).
 
 ## Findings
 
-Bugs and surprises found while testing:
+| # | Finding | Severity |
+|---|---|---|
+| 1 | **Bug:** `?limit=-1` returns 1350 of 1351 Pokémon. One is silently dropped. | Medium |
+| 2 | **Bug:** a negative `?offset` wraps around to the end of the list instead of being rejected. | Low |
+| 3 | `/pokemon/giratina` and `/pokemon/aegislash` return 404. Pokémon with several forms must be requested by form name (`giratina-altered`). A trap for players; not documented. | Low |
+| 4 | The docs say only `limit` and `offset` query parameters are allowed, but the API enforces this on single records (403) and not on lists (200). | Low |
+| 5 | Error formats are inconsistent: unknown names give a JSON 404, an unknown endpoint gives 400, and blocked characters or write requests give a 403 HTML page. | Low |
+| 6 | Not in the docs: name lookups ignore capitalization (`GENGAR` works), and `location_area_encounters` is a full URL, not a path. | Info |
 
-| # | Finding | Severity | Test |
-|---|---|---|---|
-| 1 | **`limit=-1` drops one result**: returns 1350 of 1351 entries with no error. | Medium (silent data loss) | `test_negative_limit_does_not_drop_results` (xfail) |
-| 2 | **A negative `offset` wraps to the end of the list** (`offset=-5` returns the last forms), and `next` points to `offset=-2`. Looks like Python negative slicing leaking through. | Low | `test_negative_offset_is_not_treated_as_from_the_end` (xfail) |
-| 3 | **`/pokemon/giratina` and `/pokemon/aegislash` return 404.** Pokémon with several forms are stored under the form name (`giratina-altered`, `aegislash-shield`). The species endpoint accepts the bare name. This is a usability trap for players. | Low (by design, undocumented) | `test_multi_form_pokemon_need_form_name` |
-| 4 | Docs say only `limit` and `offset` are allowed as query parameters, but `/pokemon?limit=5&foo=bar` returns **200** while `/pokemon/25?foo=bar` returns **403**, so the two are inconsistent. | Low (docs mismatch) | not automated, recorded here |
-| 5 | Unknown endpoint (`/pokemonz/25`) returns **400**, not 404. Blocked characters (`farfetch'd`, `mr.mime`) and write methods return a **403 HTML page** from Cloudflare, not a JSON error. | Low | `test_api_behavior.py` |
-| 6 | Name lookups are **case-insensitive** (`GENGAR` works), which the docs don't state. | Info | `test_name_lookup_is_case_insensitive` |
-| 7 | `location_area_encounters` is a full URL, not a path as the docs suggest. | Info (docs mismatch) | `test_encounters_link_resolves` |
-| 8 | The root URL lists `meta` (deploy date and commit hash) alongside the resource lists, but it isn't a list. Also, `/pokedex/sinnoh` 404s: regional dexes are named per game (`original-sinnoh`, `extended-sinnoh`). | Info | `test_smoke_all_endpoints.py`, `test_game_world.py` |
+Bugs 1 and 2 have tests that assert the *correct* behavior and are marked as expected failures (`xfail`).
+If PokéAPI fixes a bug, its test starts passing and the run flags it, so the marker can be removed.
 
-**One of my assumptions was wrong:** I first asserted that an encounter's `max_chance` is at most 100%.
-The live data has values above 100 (e.g. 110 and 130 for Psyduck around the Sinnoh lakes). `max_chance` is the *sum* of every method's chance in an area
-(e.g. walking 10% + 10% plus surfing 60% + 30% = 110). The test now checks that the total adds up exactly,
-which is stricter than the original range check.
+**A wrong assumption, corrected:** I first assumed an encounter's `max_chance` could not exceed 100%.
+The real data goes higher, because `max_chance` is the *total* of every way to find a Pokémon in an area
+(e.g. walking 10% + 10% and surfing 60% + 30% = 110). The test now checks that the total adds up exactly.
 
-Known bugs are marked `xfail(strict=True)`, so the suite stays green, but CI alerts if a bug gets fixed (the test
-then passes unexpectedly and fails the run). That's the signal to remove the marker.
+## How the tests are designed
 
-## Assumptions
+- **Expected values come from the live API,** checked against the docs. They are not written from memory.
+  They live in one file, [`tests/data/favorites.py`](tests/data/favorites.py).
+- **Numbers that grow are never hard-coded.** The total number of Pokémon is checked by paging through every
+  result and comparing with the reported count. A new game adding Pokémon doesn't break the suite.
+- **Links are checked in both directions,** e.g. Gengar's move list includes Shadow Ball, *and* Shadow Ball's list of
+  learners includes Gengar.
+- **Responses are cached during a run,** as PokéAPI's fair-use policy asks.
+- **The tests can actually fail:** I changed expected values on purpose (e.g. Dragonite's stat total) and confirmed
+  the matching tests failed.
 
-- Tests run against the live public API, so they depend on network access and PokéAPI being up. Stubbing was optional and not done (see next steps).
-- Game data for released games doesn't change (old learnsets, regional dex numbers, TM numbers, Platinum encounters).
+**When a new Pokémon game comes out:** new Pokémon, forms, and games don't break anything. A test fails only if a
+new game *rebalances* one of the test Pokémon (e.g. changes its stats), because expected values reflect the latest
+game. In that case, check the Pokémon's `past_stats` / `past_abilities` / `past_types` fields in the API. If the old
+value moved there, the change is intentional: update `favorites.py`. A test also fails on purpose if PokéAPI adds or
+removes an endpoint, so the smoke-test list stays current.
 
-### What happens when a new Pokémon game comes out
+## Limitations and next steps
 
-| Change | Effect on the suite |
-|---|---|
-| New species (new generation) | **Passes.** Counts are floors (≥ 1025) and consistency rules (IDs have no gaps up to the live count, `count` equals the entries walked), not pinned totals. |
-| New forms (megas etc.) | **Passes.** Forms get IDs from 10001, which the tests expect. Mega Dragonite was added this way. |
-| New games, Pokédexes, move history entries | **Passes.** Comparisons of things that grow are subset checks. |
-| List order changes | **Passes.** No test depends on the order of a list. |
-| A game **rebalances** one of the test Pokémon (stats, abilities, types, move power) | **Fails on purpose.** Expected values in `tests/data/favorites.py` reflect the latest game. Check the Pokémon's `past_*` fields: if the old value moved there, it's an intentional rebalance, so update the table. Otherwise it's a data defect. |
-| PokéAPI adds or removes an endpoint | **Fails on purpose** (`test_root_lists_every_known_endpoint`), so the smoke list gets updated. |
-- The 2-second response-time limit is a sanity check, not a performance benchmark.
+- Runs against the live API, so it needs the network and PokéAPI being up. **Next:** record responses
+  (e.g. VCR.py) so the suite also runs offline.
+- The response-time check (under 2 seconds) is a sanity check, not a performance test.
+- **Next:** run the consistency checks across all 1025 species nightly, not just the sample; pin expected
+  values to a fixed generation using the `past_*` fields so rebalances never break tests; check caching
+  (`ETag` → 304); report bugs 1 and 2 to the PokéAPI project.
 
-## What I'd test next
+## Terms
 
-- **Stubbed/contract tests:** record responses (e.g. `responses` or VCR.py) so the suite also runs offline and in
-  CI without depending on the live service, and add contract tests for the schemas.
-- **Wider data checks:** run the consistency checks (variety links, evolution ↔ species, type chart) across *all*
-  1025 species in a nightly job, not just the sample.
-- **Rebalance-proof expected values:** pin each Pokémon's stats, abilities, and types *as of a fixed generation*
-  by rebuilding them from `past_stats` / `past_abilities` / `past_types`, so new games never break those tests.
-- **Deeper checks for the smoke-only sections** (Berries, Contests), e.g. berry flavor ↔ nature preferences.
-- **More player questions:** held items and their rarity, Pokémon availability per game (version exclusives),
-  egg-group breeding compatibility, abilities' effect text in other languages.
-- **Non-functional:** cache behavior (`ETag` / `If-None-Match` → 304), behavior under rapid repeated requests,
-  and very large pages (`limit=100000`).
-- Report findings 1 and 2 upstream to the PokéAPI GitHub project.
+- **xfail:** a pytest marker for a test that is *expected* to fail, used here for confirmed bugs.
+- **Smoke test:** a quick check that something basically works (here: each endpoint responds with valid data).
+- **Base stat total:** the sum of a Pokémon's six base stats, a common way players compare Pokémon.
 
 ## Project layout
 
 ```
 tests/
-  conftest.py          # session fixtures: HTTP session, cached API client
-  helpers.py           # constants and pure helpers (stat totals, damage multipliers, chain search)
-  schemas.py           # JSON Schemas for the response shapes the tests rely on
-  data/favorites.py    # expected values, observed from the live API
-  test_*.py            # one module per player question
-.github/workflows/tests.yml   # CI: pytest on push, PR, and weekly
+  conftest.py          shared setup: HTTP session and a cached API client
+  helpers.py           small functions (stat totals, damage multipliers, evolution-chain search)
+  schemas.py           JSON Schemas for the response shapes the tests rely on
+  data/favorites.py    expected values for the test Pokémon
+  test_*.py            the tests, one file per question above
+.github/workflows/tests.yml   GitHub Actions: runs the suite on push and weekly
 ```

@@ -8,7 +8,8 @@ import pytest
 from tests.data.favorites import MATCHUPS
 from tests.helpers import damage_multiplier, names, type_names
 
-# The 18 battle types. The API also lists 'unknown', 'shadow' and 'stellar', which are not normal battle types.
+# The 18 battle types. The API also lists 'unknown', 'shadow' (spin-off games), and 'stellar' (Tera-only),
+# which no Pokémon has as a normal type.
 BATTLE_TYPES = [
     "normal", "fighting", "flying", "poison", "ground", "rock", "bug", "ghost", "steel",
     "fire", "water", "grass", "electric", "psychic", "ice", "dragon", "dark", "fairy",

@@ -41,7 +41,7 @@ def test_which_tm_teaches_shadow_ball(api, version_group, tm):
 
 
 def test_same_tm_number_teaches_different_moves_in_different_games(api):
-    """TM30 is Shadow Ball in Platinum but not in Red/Blue. A classic player mix-up."""
+    """TM numbers are per game: TM30 teaches Shadow Ball in Platinum but a different move in Red/Blue."""
     tm30 = {m["version_group"]["name"]: m["machine"]["url"] for m in api.json("/item/tm30")["machines"]}
     assert api.json(tm30["platinum"])["move"]["name"] == "shadow-ball"
     assert api.json(tm30["red-blue"])["move"]["name"] != "shadow-ball"

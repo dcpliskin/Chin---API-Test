@@ -11,7 +11,7 @@ def chain_for(api, species_name: str) -> dict:
 
 
 def default_detail(link: dict) -> dict:
-    """The default (original) evolution method; some species gained extra methods in later games."""
+    """The evolution method the API flags `is_default`. Some species gained extra methods in later games."""
     defaults = [d for d in link["evolution_details"] if d.get("is_default")]
     return defaults[0] if defaults else link["evolution_details"][0]
 
@@ -38,7 +38,7 @@ def test_full_squirtle_line(api):
 
 
 def test_gengar_also_evolves_with_linking_cord_in_legends_arceus(api):
-    # Legends: Arceus has no trading, so it added an item method. Players often search for this.
+    # Legends: Arceus has no trading, so trade evolutions use the Linking Cord item there instead.
     gengar = find_chain_link(chain_for(api, "gengar"), "gengar")
     methods = {(d["trigger"]["name"], (d.get("item") or {}).get("name")) for d in gengar["evolution_details"]}
     assert ("trade", None) in methods

@@ -85,7 +85,7 @@ MATCHUPS = {
     "squirtle": {2.0: {"grass", "electric"}, 0.5: {"steel", "fire", "water", "ice"}},
 }
 
-# Evolution steps: (from, to, trigger, detail key, detail value), using the earliest (default) method.
+# Evolution steps: (from, to, trigger, detail key, detail value), for the method the API flags `is_default`.
 EVOLUTIONS = [
     ("squirtle", "wartortle", "level-up", "min_level", 16),
     ("wartortle", "blastoise", "level-up", "min_level", 36),
